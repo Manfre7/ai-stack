@@ -1,0 +1,15 @@
+services/hermes/data/*
+
+logs/
+
+workspace/archive/
+
+workspace/temp/
+
+**/.DS_Store
+
+**/__pycache__
+
+**/node_modules
+
+.env

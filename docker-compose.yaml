@@ -1,0 +1,33 @@
+name: ai-stack
+
+services:
+
+  hermes:
+
+    image: nousresearch/hermes-agent:latest
+
+    container_name: hermes
+
+    restart: unless-stopped
+
+    ports:
+      - "3001:3000"
+
+    env_file:
+      - .env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      - ./services/hermes/data:/opt/data
+      - ./workspace:/workspace
+      - ./logs:/logs
+
+    healthcheck:
+      test: ["CMD", "hermes", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    stdin_open: true
+    tty: true
