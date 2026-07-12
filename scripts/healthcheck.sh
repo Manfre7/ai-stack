@@ -63,14 +63,20 @@ echo
 
 echo -e "${BLUE}${LLM_PROVIDER_NAME}${NC}"
 
-MODEL=$(curl -s $OPENAI_API_BASE/models \
-| jq -r '.data[0].id' 2>/dev/null)
+if response=$(curl -fsS \
+       	 --connect-timeout 3 \
+        "$OPENAI_API_BASE/models"); then
 
-if [ -z "$MODEL" ] || [ "$MODEL" = "null" ]; then
-    err "${LLM_PROVIDER_NAME} not reachable"
+		MODEL=$(jq -r '.data[0].id // empty' <<<"$response")
+
+	if [ -n "$MODEL" ]; then
+		ok "Endpoint reachable"
+		ok "Model: $MODEL"
+	else
+	        err "No model returned"
+	fi
 else
-    ok "Endpoint reachable"
-    ok "Model: $MODEL"
+    err "${LLM_PROVIDER_NAME} not reachable"
 fi
 
 echo
