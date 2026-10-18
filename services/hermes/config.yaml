@@ -1,0 +1,16 @@
+# Hermes managed config layer, mounted read-only at /etc/hermes/config.yaml.
+#
+# Hermes applies these keys on top of its own /opt/data/config.yaml, so they
+# always win and cannot be changed from the CLI or from chat. ${VAR} values
+# are read from the container environment, which docker-compose.yaml fills
+# from .env: edit .env, not this file, to switch provider or model.
+
+model:
+  provider: ${LLM_PROVIDER}
+  default: ${LLM_MODEL}
+  base_url: ${LLM_BASE_URL}
+  api_key: ${LLM_API_KEY}
+
+terminal:
+  # Commands run by the agent start in the shared workspace.
+  cwd: /workspace

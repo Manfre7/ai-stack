@@ -12,13 +12,12 @@ It combines:
 
 - 🤖 Hermes Agent
 - 🧠 Local LLMs through llama.cpp
-- 💬 OpenAI-compatible API
+- 💬 Telegram bot
 - 📁 Shared development workspace
 - 🧠 Persistent AI memory
-- ⚙️ Automatic configuration
-- 🔄 One-command lifecycle management
+- ⚙️ Configuration from a single `.env` file
 
-The entire environment is reproducible from Git with only a few commands.
+The entire environment is reproducible from Git with a single `docker compose up -d`.
 
 ---
 
@@ -26,39 +25,38 @@ The entire environment is reproducible from Git with only a few commands.
 
 - Local-first architecture
 - Docker-based deployment
-- Automatic Hermes configuration
+- LLM provider, model and Telegram bot configured in `.env`
+- No setup scripts: Hermes reads the configuration at startup
 - OpenAI-compatible local endpoint (llama.cpp)
 - Persistent memories and sessions
 - Shared workspace for AI agents
-- Backup & Restore
+- Native Backup & Restore
 - Health diagnostics
 - One-command updates
 - UID/GID synchronization
-- Future-proof Hermes configuration
-- Ready for Telegram, OpenWebUI and OpenClaw
+- Ready for OpenWebUI and OpenClaw
 
 ---
 
 # Architecture
 
 ```
-                 +----------------------+
-                 |      llama.cpp       |
-                 | OpenAI Compatible API|
-                 +----------+-----------+
-                            |
-                            |
-             http://localhost:8080/v1
-                            |
-                            |
-                 +----------v-----------+
-                 |    Hermes Agent      |
-                 +----------+-----------+
-                            |
-           +----------------+----------------+
-           |                                 |
-      /opt/data                       /workspace
-    Hermes state                  Shared projects
+                 +-----------------------+
+                 |       llama.cpp       |
+                 | OpenAI-compatible API |
+                 +-----------+-----------+
+                             |
+                        LLM_BASE_URL
+                             |
+ +----------+    +-----------v-----------+
+ | Telegram |<-->|     Hermes Agent      |
+ +----------+    |   (gateway process)   |
+                 +-----------+-----------+
+                             |
+            +----------------+----------------+
+            |                                 |
+        /opt/data                        /workspace
+      Hermes state                    Shared projects
 ```
 
 Hermes stores its own data separately from the development workspace.
@@ -73,37 +71,11 @@ This allows multiple AI tools to share the same project directory without interf
 ai-stack/
 │
 ├── services/
-│   ├── hermes/
-│   │   └── data/
-│   │
-│   ├── open-webui/
-│   │
-│   └── openclaw/
-│
-├── workspace/
-│   ├── projects/
-│   ├── playground/
-│   ├── shared/
-│   ├── archive/
-│   └── temp/
-│
-├── logs/
-│
-├── scripts/
-│   ├── start.sh
-│   ├── stop.sh
-│   ├── restart.sh
-│   ├── update.sh
-│   ├── backup.sh
-│   ├── restore.sh
-│   ├── status.sh
-│   ├── doctor.sh
-│   ├── healthcheck.sh
-│   │
 │   └── hermes/
-│       ├── init.sh
-│       ├── configure.sh
-│       └── wait.sh
+│       ├── config.yaml      # managed Hermes config, values taken from .env
+│       └── data/            # Hermes state, mounted at /opt/data (gitignored)
+│
+├── workspace/               # shared workspace, mounted at /workspace
 │
 ├── docker-compose.yaml
 ├── .env.example
@@ -114,13 +86,10 @@ ai-stack/
 
 # Requirements
 
-- Docker
-- Docker Compose
+- Docker with Docker Compose v2
 - WSL2 (recommended on Windows)
-- Local llama.cpp server
-- GNU Bash
-- Mike Farah yq v4
-- Jqlang jq
+- An OpenAI-compatible LLM server, e.g. llama.cpp
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
 
 ---
 
@@ -139,7 +108,7 @@ Create your environment
 cp .env.example .env
 ```
 
-Edit the configuration
+Edit the configuration: LLM endpoint and model, Telegram bot token and allowed users
 
 ```bash
 nano .env
@@ -148,123 +117,64 @@ nano .env
 Start the stack
 
 ```bash
-./scripts/start.sh
+docker compose up -d
 ```
 
-Verify the installation
+Check the logs, then send a message to your bot
 
 ```bash
-./scripts/doctor.sh
+docker compose logs -f hermes
 ```
 
 ---
 
 # Configuration
 
-Most configuration lives inside `.env`.
+All configuration lives inside `.env`.
 
-Example:
+| Variable | Description |
+|----------|-------------|
+| `LLM_PROVIDER` | Hermes provider id. `custom` (default) = any OpenAI-compatible endpoint |
+| `LLM_BASE_URL` | Endpoint URL as seen from the container, e.g. `http://host.docker.internal:8080/v1` |
+| `LLM_MODEL` | Model id exposed by the endpoint **(required)** |
+| `LLM_API_KEY` | Endpoint key; leave empty if llama.cpp runs without `--api-key` |
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather **(required)** |
+| `TELEGRAM_ALLOWED_USERS` | Comma-separated numeric Telegram user IDs allowed to use the bot **(required)** |
+| `TZ` | Container timezone |
+| `HERMES_UID` / `HERMES_GID` | Host user that owns `services/hermes/data` |
+| `HERMES_VERSION` | Image tag, `latest` when unset |
 
-```ini
-###################
-# LLM Provider
-###################
+If a required variable is missing, `docker compose up` stops with an explicit error.
 
-OPENAI_API_BASE=http://172.28.160.1:8080/v1
-OPENAI_API_KEY=local
+To change the configuration, edit `.env` and run `docker compose up -d` again: Compose recreates the container with the new values.
 
-LLM_PROVIDER=custom
-LLM_NAME=llama.cpp
-LLM_MODEL=gemma-4-12B-it-qat-UD-Q4_K_XL
-
-###################
-# Hermes
-###################
-
-TZ=Europe/Rome
-
-HERMES_UID=1000
-HERMES_GID=1000
-
-###################
-# Telegram
-###################
-
-TELEGRAM_BOT_TOKEN=1234567890:AAExampleBotToken1234567890abcdef
-TELEGRAM_ALLOWED_USERS=123456789,987654321
-
-```
+Any other variable supported by Hermes (e.g. `TELEGRAM_HOME_CHANNEL`) can be added to `.env` too: the whole file is passed to the container.
 
 ---
 
-# Automatic Hermes Configuration
+# How Configuration Works
 
-AI Stack does **not** maintain a custom copy of Hermes' `config.yaml`.
+Hermes reads two kinds of settings, and the stack feeds both from `.env`:
 
-Instead, during startup it automatically updates only the required fields inside the configuration generated by Hermes itself.
-
-The synchronization is performed by
-
-```
-scripts/hermes/configure.sh
-```
-
-which updates:
-
-- model provider
-- model name
-- OpenAI endpoint
-- API key
-- custom providers
-
-using the values defined inside `.env`.
-
-This approach keeps the project compatible with future Hermes releases, since any new configuration options introduced upstream remain untouched.
-
----
-
-# Startup Flow
+- **Telegram** is configured by environment variables only. `TELEGRAM_BOT_TOKEN` enables the Telegram adapter of the Hermes gateway and `TELEGRAM_ALLOWED_USERS` is its allowlist.
+- **The model** is read only from `config.yaml`. The repo mounts [services/hermes/config.yaml](services/hermes/config.yaml) at `/etc/hermes/config.yaml`, the *managed* configuration layer of Hermes: its keys are applied on top of the `config.yaml` that Hermes generates in `/opt/data`, and its `${VAR}` references are resolved from the container environment, that is from `.env`.
 
 ```
-User
-
- │
-
- ▼
-
-./scripts/start.sh
-
- │
-
- ├────────────► scripts/hermes/init.sh
- │                     │
- │                     │
- │          config.yaml exists?
- │                     │
- │         ┌───────────┴───────────┐
- │         │                       │
- │         │ Yes                   │ No
- │         │                       │
- │         │                docker compose start hermes
- │         │                       │
- │         │                scripts/hermes/wait.sh (waits for config.yaml)
- │         │                       │
- │         │                docker compose stop hermes
- │         │
- │         └───────────────┬───────┘
- │                         │
- │                         ▼
- ├────────────► scripts/hermes/configure.sh
- │                         │
- │                         ▼
- │          Update config.yaml using yq
- │          (provider, endpoint, model...)
- │
- ├────────────► docker compose up -d
-                           │
-                           ▼
-                    AI Stack ready
+.env ──► container environment ──┬──► TELEGRAM_*  ──► Telegram gateway
+                                 │
+                                 └──► ${LLM_*} in /etc/hermes/config.yaml
+                                                  │
+                                                  ▼
+                                      overrides /opt/data/config.yaml
 ```
+
+Everything else in `/opt/data/config.yaml` stays under Hermes' control, so options added by new Hermes releases keep working.
+
+Things to know:
+
+- `.env` is the single source of truth for the model: the keys set by the managed layer cannot be changed with `hermes config set` or from chat.
+- Configure Telegram only through `.env`. `hermes setup`, `hermes gateway setup` and the dashboard QR flow write `TELEGRAM_*` into `services/hermes/data/.env`, which Hermes loads with priority over the container environment. If that happens, delete those lines from `services/hermes/data/.env`.
+- `host.docker.internal` points to the Docker host (with Docker Desktop, the Windows host running llama.cpp), so `LLM_BASE_URL` does not depend on WSL2 IP addresses, which change with reboots and networking mode. If the container cannot connect, start llama.cpp with `--host 0.0.0.0`.
 
 ---
 
@@ -318,115 +228,51 @@ Mounted from
 workspace/
 ```
 
-This directory is intentionally kept separate so multiple AI tools can safely share it.
+This directory is intentionally kept separate so multiple AI tools can safely share it. Commands run by the Hermes agent start here.
 
 ---
 
-# Scripts
+# Operations
 
-## Lifecycle
-
-| Script | Description |
-|---------|-------------|
-| start.sh | Configure and start the AI Stack |
-| stop.sh | Stop all running containers |
-| restart.sh | Restart the complete stack |
-| update.sh | Pull latest images and recreate containers |
-| status.sh | Show running services |
-
----
-
-## Maintenance
-
-| Script | Description |
-|---------|-------------|
-| backup.sh | Backup Hermes persistent data |
-| restore.sh | Restore a previous backup |
-| doctor.sh | Complete environment diagnostics |
-| healthcheck.sh | Quick health verification |
-
----
-
-## Internal Hermes scripts
-
-These scripts are automatically executed by the lifecycle scripts.
-
-| Script | Purpose |
-|---------|----------|
-| hermes/init.sh | First-run initialization |
-| hermes/configure.sh | Synchronize config.yaml from .env |
-| hermes/wait.sh | Wait until Hermes is ready |
-
-Normally they should not be executed manually.
+| Task | Command |
+|------|---------|
+| Start, or apply `.env` changes | `docker compose up -d` |
+| Stop | `docker compose down` |
+| Apply changes to `services/hermes/config.yaml` | `docker compose restart hermes` |
+| Status | `docker compose ps` |
+| Logs | `docker compose logs -f hermes` |
+| Diagnostics | `docker compose exec hermes hermes doctor` |
+| Effective Hermes configuration | `docker compose exec hermes hermes config` |
+| Chat from the terminal | `docker compose exec hermes hermes` |
 
 ---
 
 # Updating
 
-Updating the entire stack only requires
-
 ```bash
-./scripts/update.sh
+docker compose pull
+docker compose up -d
 ```
 
-The update process:
-
-- pulls latest Docker images
-- recreates containers
-- updates Hermes configuration
-- preserves all persistent data
-
----
-
-# Health Checks
-
-## Quick verification
-
-```bash
-./scripts/healthcheck.sh
-```
-
-Checks:
-
-- Docker
-- Hermes container
-- LLM provider endpoint
-- running containers
-- Telegram bot
-
----
-
-## Complete diagnostics
-
-```bash
-./scripts/doctor.sh
-```
-
-Checks:
-
-- Docker installation
-- mounted volumes
-- permissions
-- UID/GID mapping
-- Hermes configuration
-- workspace
-- OpenAI endpoint
-- model availability
+Persistent data in `services/hermes/data` is preserved. Set `HERMES_VERSION` in `.env` to pin a release and update only when you choose.
 
 ---
 
 # Backup & Restore
 
-Create a backup
+Create a backup (a zip of `/opt/data`, with a consistent copy of the SQLite databases)
 
 ```bash
-./scripts/backup.sh
+docker compose exec hermes hermes backup
 ```
 
-Restore
+The zip is written to `services/hermes/data/hermes-backup-<timestamp>.zip`: move it somewhere safe. It does not include the repository `.env`, so keep a copy of that too.
+
+Restore: copy the zip back into `services/hermes/data/`, then
 
 ```bash
-./scripts/restore.sh
+docker compose exec hermes hermes import /opt/data/hermes-backup-<timestamp>.zip
+docker compose restart hermes
 ```
 
 ---
@@ -456,7 +302,7 @@ Removing this directory completely resets Hermes.
 # Roadmap
 
 - ✅ Docker deployment
-- ✅ Automatic Hermes configuration
+- ✅ Configuration from `.env`
 - ✅ Local llama.cpp integration
 - ✅ UID/GID synchronization
 - ✅ Backup & Restore

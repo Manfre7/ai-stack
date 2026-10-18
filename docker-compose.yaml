@@ -4,30 +4,34 @@ services:
 
   hermes:
 
-    image: nousresearch/hermes-agent:latest
+    image: nousresearch/hermes-agent:${HERMES_VERSION:-latest}
 
     container_name: hermes
 
     restart: unless-stopped
 
-    ports:
-      - "3001:3000"
+    # Messaging gateway (Telegram) as the main process, supervised by the image.
+    command: ["gateway", "run"]
 
     env_file:
       - .env
+
+    # Compose refuses to start when a required value is missing from .env.
+    # The defaults make sure every ${VAR} used by services/hermes/config.yaml
+    # is defined, because Hermes keeps an undefined ${VAR} as literal text.
+    environment:
+      LLM_MODEL: ${LLM_MODEL:?set LLM_MODEL in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:?set TELEGRAM_ALLOWED_USERS in .env}
+      LLM_PROVIDER: ${LLM_PROVIDER:-custom}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
     volumes:
+      # Managed config layer: overrides /opt/data/config.yaml with values from .env.
+      - ./services/hermes/config.yaml:/etc/hermes/config.yaml:ro
       - ./services/hermes/data:/opt/data
       - ./workspace:/workspace
-      - ./logs:/logs
-
-    healthcheck:
-      test: ["CMD", "hermes", "--version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    stdin_open: true
-    tty: true

@@ -1,7 +1,5 @@
 services/hermes/data/*
 
-logs/
-
 workspace/archive/
 
 workspace/temp/
