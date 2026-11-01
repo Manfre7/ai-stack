@@ -21,8 +21,6 @@ services:
     # is defined, because Hermes keeps an undefined ${VAR} as literal text.
     environment:
       LLM_MODEL: ${LLM_MODEL:?set LLM_MODEL in .env}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
-      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:?set TELEGRAM_ALLOWED_USERS in .env}
       LLM_PROVIDER: ${LLM_PROVIDER:-custom}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
